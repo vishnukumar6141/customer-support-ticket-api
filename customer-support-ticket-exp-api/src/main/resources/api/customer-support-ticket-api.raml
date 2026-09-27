@@ -1,0 +1,101 @@
+#%RAML 1.0
+
+title: Customer Support Ticket API
+version: v1
+baseUri: /api/v1
+mediaType: application/json
+
+/tickets:
+
+  post:
+    description: Create a new support ticket
+    body:
+      application/json:
+        example:
+          {
+            "customerId": "CUS101",
+            "subject": "Payment failed",
+            "description": "Payment was deducted but order was not created",
+            "priority": "HIGH"
+          }
+    responses:
+      201:
+        body:
+          application/json:
+            example:
+              {
+                "ticketId": "TKT1001",
+                "status": "OPEN",
+                "message": "Ticket created successfully"
+              }
+
+  /{ticketId}:
+
+    uriParameters:
+      ticketId:
+        description: Unique identifier of the support ticket
+        type: string
+        example: TKT1001
+
+    get:
+      description: Get a support ticket by ticket ID
+      responses:
+        200:
+          body:
+            application/json:
+              example:
+                {
+                  "ticketId": "TKT1001",
+                  "customerId": "CUS101",
+                  "subject": "Payment failed",
+                  "priority": "HIGH",
+                  "status": "OPEN"
+                }
+
+        404:
+          body:
+            application/json:
+              example:
+                {
+                  "errorCode": "TICKET_NOT_FOUND",
+                  "message": "Ticket not found"
+                }
+
+    /status:
+
+      patch:
+        description: Update the status of a support ticket
+        body:
+          application/json:
+            example:
+              {
+                "status": "RESOLVED"
+              }
+        responses:
+          200:
+            body:
+              application/json:
+                example:
+                  {
+                    "ticketId": "TKT1001",
+                    "status": "RESOLVED",
+                    "message": "Ticket status updated"
+                  }
+
+          400:
+            body:
+              application/json:
+                example:
+                  {
+                    "errorCode": "INVALID_STATUS",
+                    "message": "Invalid ticket status. Allowed values are OPEN, IN_PROGRESS, RESOLVED, CLOSED"
+                  }
+
+          404:
+            body:
+              application/json:
+                example:
+                  {
+                    "errorCode": "TICKET_NOT_FOUND",
+                    "message": "Ticket not found"
+                  }

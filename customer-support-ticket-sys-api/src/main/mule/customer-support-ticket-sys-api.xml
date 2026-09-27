@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:db="http://www.mulesoft.org/schema/mule/db"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/db http://www.mulesoft.org/schema/mule/db/current/mule-db.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="56cf0cbb-6219-4f6c-b378-947e80027b79" >
+		<http:listener-connection host="0.0.0.0" port="8083" />
+	</http:listener-config>
+	<db:config name="Database_Config" doc:name="Database Config" doc:id="42e24932-74e2-4fe5-92e6-889986d2fa99" >
+		<db:my-sql-connection host="localhost" port="3306" user="root" password="Password123!" database="support_ticket_db" />
+	</db:config>
+	<flow name="customer-support-ticket-sys-apiFlow(create)" doc:id="8e3eb642-030d-4257-8991-c7bb585c8bc8" >
+		<http:listener doc:name="Listener" doc:id="2bf0873b-b6ee-4917-8bdf-e413abb7b7aa" config-ref="HTTP_Listener_config" path="/tickets" allowedMethods="POST"/>
+		<logger level="INFO" doc:name="Logger" doc:id="9d3d29d7-db93-430c-9c97-609a5b7a13fa" message="System API received create ticket request"/>
+		<db:insert doc:name="Insert" doc:id="628772b1-480a-4923-ad66-a5e5c557b996" config-ref="Database_Config">
+			<db:sql ><![CDATA[INSERT INTO tickets
+(ticket_id, customer_id, subject, description, priority, status)
+VALUES
+(:ticketId, :customerId, :subject, :description, :priority, :status)]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+    ticketId: payload.ticketId,
+    customerId: payload.customerId,
+    subject: payload.subject,
+    description: payload.description,
+    priority: payload.priority,
+    status: payload.status
+}]]]></db:input-parameters>
+		</db:insert>
+		<ee:transform doc:name="Transform Message" doc:id="3f5a815c-87fd-4cca-a56e-3ab2f860a315" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    message: "Ticket stored successfully",
+    status: "SUCCESS"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<flow name="customer-support-ticket-sys-apiFlow1(get)" doc:id="63e1122b-5765-4762-ba54-87cdbbb8092c" >
+		<http:listener doc:name="Listener" doc:id="fd849acd-a678-4b66-ba15-e374e2cd8ab7" config-ref="HTTP_Listener_config" path="/tickets/{ticketId}" allowedMethods="GET">
+			<http:response statusCode="#[vars.httpStatus default 200]" />
+		</http:listener>
+		<logger level="INFO" doc:name="Logger" doc:id="afd1bc7e-1d12-4d7d-953b-c03dc479527f" message="System API received get ticket request"/>
+		<db:select doc:name="Select" doc:id="03dc92a9-f237-4374-856c-e233ea935e57" config-ref="Database_Config">
+			<db:sql ><![CDATA[SELECT ticket_id, customer_id, subject, description, priority, status
+FROM tickets
+WHERE ticket_id = :ticketId]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+    ticketId: attributes.uriParams.ticketId
+}]]]></db:input-parameters>
+		</db:select>
+		<choice doc:name="Choice" doc:id="71340dd3-c91e-4224-b113-528176c7d807" >
+			<when expression="sizeOf(payload) == 0">
+				<logger level="INFO" doc:name="Logger" doc:id="3ebdfb39-05dd-4b05-bf61-fac75a72270e" message="Ticket not found"/>
+				<raise-error doc:name="Raise error" doc:id="6e19b353-0d3a-4f21-9827-58b78e39118d" type="CUSTOM:TICKET_NOT_FOUND" description="Ticket not found"/>
+			</when>
+			<otherwise >
+				<ee:transform doc:name="Transform Message" doc:id="799cc858-90a2-4c4a-a434-cbc81032affe">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+if (isEmpty(payload))
+    {}
+else
+    {
+        ticketId: payload[0].ticket_id,
+        customerId: payload[0].customer_id,
+        subject: payload[0].subject,
+        description: payload[0].description,
+        priority: payload[0].priority,
+        status: payload[0].status
+    }]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="a37631f1-9799-4d35-8cb3-6278d1598c59" type="CUSTOM:TICKET_NOT_FOUND">
+				<set-variable value="404" doc:name="Set Variable" doc:id="9fb792f7-aeb3-41bd-9f02-b26b78ea18f0" variableName="httpStatus"/>
+				<ee:transform doc:name="Transform Message" doc:id="258006c5-4d4d-4bc0-8b70-f93b7327a3ed" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    errorCode: "TICKET_NOT_FOUND",
+    message: "Ticket not found"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+	<flow name="customer-support-ticket-sys-apiFlow(patch)" doc:id="3a24bc07-5184-42bb-aacb-da7b2346d74c" >
+		<http:listener doc:name="Listener" doc:id="f95af360-123d-4693-af29-7071cf63a891" config-ref="HTTP_Listener_config" path="/tickets/{ticketId}/status" allowedMethods="PATCH"/>
+		<logger level="INFO" doc:name="Logger" doc:id="28c6cdf1-eea9-4ea4-a29e-6865c191757b" message="System API received update ticket status request"/>
+		<db:update doc:name="Update" doc:id="d845d460-deba-43e8-b28a-bb126f47955d" config-ref="Database_Config">
+			<db:sql ><![CDATA[UPDATE tickets
+SET status = :status
+WHERE ticket_id = :ticketId]]></db:sql>
+			<db:input-parameters ><![CDATA[#[{
+    ticketId: attributes.uriParams.ticketId,
+    status: payload.status
+}]]]></db:input-parameters>
+		</db:update>
+		<ee:transform doc:name="Transform Message" doc:id="418834ea-d420-43d6-8e51-6784710e74b1" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    ticketId: attributes.uriParams.ticketId,
+    status: payload.status,
+    message: "Ticket status updated"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>

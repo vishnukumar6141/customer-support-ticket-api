@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:api-gateway="http://www.mulesoft.org/schema/mule/api-gateway" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/api-gateway http://www.mulesoft.org/schema/mule/api-gateway/current/mule-api-gateway.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="1f17189b-7e24-473d-adbd-67390c0e201c" >
+		<http:listener-connection host="0.0.0.0" port="8081" />
+	</http:listener-config>
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="cbaeb3f9-7b77-4545-a281-9ef756620181" >
+		<http:request-connection host="localhost" port="8082" />
+	</http:request-config>
+	<http:request-config name="HTTP_Request_configuration1" doc:name="HTTP Request configuration" doc:id="42e72b5e-6c3c-4fb2-b43e-431956c26f06" >
+		<http:request-connection host="localhost" port="8082" />
+	</http:request-config>
+	<api-gateway:autodiscovery apiId="21200920" ignoreBasePath="true" doc:name="API Autodiscovery" doc:id="bc2c6204-c58f-4dc6-9d52-6254fbee2fc8" flowRef="customer-support-ticket-exp-apiFlow(create)" />
+	<flow name="customer-support-ticket-exp-apiFlow(create)" doc:id="2c637725-1024-4b80-a596-c6429cd7f8c0" >
+		<http:listener doc:name="Listener" doc:id="299f09c5-a3b9-4c29-b4a4-9b266f5b1f2a" config-ref="HTTP_Listener_config" path="/tickets">
+			<http:response statusCode="#[vars.httpStatus default 201]" />
+		</http:listener>
+		<logger level="INFO" doc:name="Logger" doc:id="0e56db2f-f02e-4d97-bf9a-f48d5106fdae" message="Received create ticket request "/>
+		<http:request method="POST" doc:name="Request" doc:id="28d768d0-deb8-476f-a0b9-7ed83bc5e02a" config-ref="HTTP_Request_configuration" path="/tickets"/>
+		<logger level="INFO" doc:name="Logger" doc:id="ad0b23af-ab31-44a4-bb7e-652ec8d473ad" message="Process API response received"/>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="d0058205-5e25-4a3b-a680-947bbe79b625" type="ANY" when="#[error.errorMessage.attributes.statusCode == 409]">
+				<set-variable value="#[409]" doc:name="Set Variable" doc:id="d1ee717d-b89f-44e4-9cee-1360eacc29a8" variableName="httpStatus"/>
+				<ee:transform doc:name="Transform Message" doc:id="f6e9d970-5ce6-4bc7-9450-34121edb9bdb" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    errorCode: "DUPLICATE_TICKET",
+    message: "Ticket already exists"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="d34fabd9-c118-4145-9b25-49692b301378" type="HTTP:BAD_REQUEST">
+				<set-variable value="400" doc:name="Set Variable" doc:id="85d11390-2631-441a-aaa7-12e44bf751fe" variableName="httpStatus"/>
+				<ee:transform doc:name="Transform Message" doc:id="4f68a105-e555-4bc4-850e-d374eda37581" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+error.errorMessage.payload]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+	<flow name="customer-support-ticket-exp-apiFlow1(get)" doc:id="3435472c-c564-4221-96c8-f2331850eaef" >
+		<http:listener doc:name="Listener" doc:id="59fc6e07-702f-4cee-b3df-d22ea442b420" config-ref="HTTP_Listener_config" path="/tickets/{ticketId}" allowedMethods="GET">
+			<http:response statusCode="#[vars.httpStatus default 200]" />
+		</http:listener>
+		<logger level="INFO" doc:name="Logger" doc:id="9ed4e6d8-e556-4003-a5d0-07fe4d4e0aa0" message="Received GET ticket request. Ticket ID: #[attributes.uriParams.ticketId]"/>
+		<set-variable value="#[attributes.uriParams.ticketId]" doc:name="Set Variable" doc:id="09119cf7-5216-4085-bc56-9cc343bef758" variableName="ticketId"/>
+		<http:request method="GET" doc:name="Request" doc:id="67dcbf7c-577c-4617-ba9a-97ea247ddbb2" config-ref="HTTP_Request_configuration1" path="/tickets/{ticketId}" >
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	ticketId : vars.ticketId
+}]]]></http:uri-params>
+		</http:request>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="45f4370b-1fce-454b-885c-0da5c32b9eab" type="HTTP:NOT_FOUND">
+				<set-variable value="404" doc:name="Set Variable" doc:id="46c028b4-2d11-439f-a682-a063a206c30a" variableName="httpStatus "/>
+				<ee:transform doc:name="Transform Message" doc:id="1e5ba121-6ba0-4017-b628-0d2624e00a1e" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    errorCode: "TICKET_NOT_FOUND",
+    message: "Ticket not found"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+	<flow name="customer-support-ticket-exp-apiFlow(patch)" doc:id="769b36da-95ff-442a-840d-d4e346f2148f" >
+		<http:listener doc:name="Listener" doc:id="0f660bb1-1c25-4046-a172-30c61b6d2ac1" config-ref="HTTP_Listener_config" path="/tickets/{ticketId}/status" allowedMethods="PATCH">
+			<http:response statusCode="#[vars.httpStatus default 200]" />
+		</http:listener>
+		<logger level="INFO" doc:name="Logger" doc:id="d267fbd0-66df-4dc0-861f-3e1c64f0a69c" message="Received update ticket status request in Experience API"/>
+		<http:request method="PATCH" doc:name="Request" doc:id="1cf7029d-7208-48d1-87a7-61bee5989fc5" config-ref="HTTP_Request_configuration" path="/tickets/{ticketId}/status">
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	ticketId : attributes.uriParams.ticketId
+}]]]></http:uri-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="59eecd4d-dc02-4a57-bf96-89ec3c5a4811" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+payload]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="27650023-c2ed-4905-b254-00c8cb59144b" type="HTTP:BAD_REQUEST">
+				<set-variable value="400" doc:name="Set Variable" doc:id="8b261974-0467-41d2-8aa8-b079d87adb64" variableName="httpStatus"/>
+				<ee:transform doc:name="Transform Message" doc:id="66815911-5783-4a22-a206-9d32be8ce4a9" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    errorCode: "INVALID_STATUS",
+    message: "Invalid ticket status. Allowed values are OPEN, IN_PROGRESS, RESOLVED, CLOSED"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+</mule>

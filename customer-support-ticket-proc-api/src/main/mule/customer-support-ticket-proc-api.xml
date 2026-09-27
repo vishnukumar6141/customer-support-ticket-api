@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:os="http://www.mulesoft.org/schema/mule/os" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:validation="http://www.mulesoft.org/schema/mule/validation"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/validation http://www.mulesoft.org/schema/mule/validation/current/mule-validation.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/os http://www.mulesoft.org/schema/mule/os/current/mule-os.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="bf43b1fd-0aba-4989-9d94-0912218c43e0" >
+		<http:listener-connection host="0.0.0.0" port="8082" />
+	</http:listener-config>
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="8e7fcd43-a404-44d8-a050-81755e5b2915" >
+		<http:request-connection host="localhost" port="8083" />
+	</http:request-config>
+	<http:request-config name="HTTP_Request_configuration1" doc:name="HTTP Request configuration" doc:id="6c80acde-232e-4c52-a8ef-95380ee8b9ba" >
+		<http:request-connection host="localhost" port="8083" />
+	</http:request-config>
+	<flow name="customer-support-ticket-proc-apiFlow(create)" doc:id="78f5f46c-f64f-452e-83d4-bf1446a58c40" >
+		<http:listener doc:name="Listener" doc:id="24827b0a-39cc-4826-b0c7-cd12276d5323" config-ref="HTTP_Listener_config" path="/tickets" allowedMethods="POST">
+			<http:response statusCode="#[vars.httpStatus default 201]" />
+		</http:listener>
+		<logger level="INFO" doc:name="Logger" doc:id="5aee0878-3220-42d2-ad27-9ed17f046201" message="Received create ticket request in Process API"/>
+		<choice doc:name="Choice" doc:id="a9d643a5-642c-403a-9c39-39d62dd7316f" >
+			<when expression="#[isBlank(payload.customerId)]">
+				<raise-error doc:name="Raise error" doc:id="88a4c013-bf5e-4205-9ae5-2d5fa2662718" type="CUSTOM:INVALID_CUSTOMER_ID" description="Customer ID cannot be blank"/>
+			</when>
+			<otherwise >
+				<choice doc:name="Choice" doc:id="c0da2100-dea3-4559-84db-5de1675a892a">
+					<when expression="#[isBlank(payload.subject)]">
+						<raise-error doc:name="Raise error" doc:id="fb33760b-cd76-489f-ac6c-44318b903b5f" type="CUSTOM:INVALID_SUBJECT" description="Subject cannot be blank"/>
+					</when>
+					<otherwise >
+						<choice doc:name="Choice" doc:id="d06ff2c1-4025-4e7c-b055-debd3335ad31">
+							<when expression="#[isBlank(payload.description)]">
+								<raise-error doc:name="Raise error" doc:id="32ac923b-fdda-47cf-859e-9027604b3464" type="CUSTOM:INVALID_DESCRIPTION" description="Description cannot be blank"/>
+							</when>
+							<otherwise >
+								<choice doc:name="Choice" doc:id="0b60694a-2287-4627-ad8c-6ac00da00f0b">
+			<when expression='#[payload.priority == "LOW" or payload.priority == "MEDIUM" or payload.priority == "HIGH"]'>
+				<logger level="INFO" doc:name="Logger" doc:id="fd46871c-dd81-47ff-851f-dc9f4e25808d" message="Valid ticket priority" />
+				<set-variable value="#[payload]" doc:name="Set Variable" doc:id="184c786f-8719-40b9-89ec-0d5890aa2b2d" variableName="ticketRequest" />
+				<os:contains doc:name="Contains" doc:id="6956238e-a865-40ce-9e3e-b1efc03bfc9c" key='#[payload.customerId ++ "_" ++ payload.subject]' />
+				<choice doc:name="Choice" doc:id="f33dd82e-f77a-4c16-9675-c9e2062ca80e">
+					<when expression="#[payload == true]">
+						<logger level="INFO" doc:name="Logger" doc:id="1c31c51f-70bf-46a0-ac29-56b8eab47ff9" message="Duplicate ticket detected" />
+						<raise-error doc:name="Raise error" doc:id="74bf5767-4f71-457f-addd-e90d6158421a" type="CUSTOM:DUPLICATE_TICKET" description="Ticket already exists" />
+					</when>
+					<otherwise>
+						<set-variable value='#["TKT" ++ (random() * 9000 + 1000) as String {format: "0"}]' doc:name="Set Variable" doc:id="7d8a36fe-e8e8-4039-97eb-ae365a33c84e" variableName="ticketId" />
+						<ee:transform doc:name="Transform Message" doc:id="b62ac38c-217c-47c4-912e-e57a8824d052">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    ticketId: vars.ticketId,
+    customerId: vars.ticketRequest.customerId,
+    subject: vars.ticketRequest.subject,
+    description: vars.ticketRequest.description,
+    priority: vars.ticketRequest.priority,
+    status: "OPEN"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+						<http:request method="POST" doc:name="Request" doc:id="325a463d-6d64-4be5-8cd7-d97f13600c24" config-ref="HTTP_Request_configuration" path="/tickets" />
+						<os:store doc:name="Store" doc:id="e28755ff-13dd-4a51-ac90-44261cd3a363" key='#[vars.ticketRequest.customerId ++ "_" ++ vars.ticketRequest.subject]'>
+							<os:value><![CDATA[#[vars.ticketId]]]></os:value>
+						</os:store>
+						<ee:transform doc:name="Transform Message" doc:id="4ae6a777-dbf4-45d3-925f-a1082bca391e">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    ticketId: vars.ticketId,
+    status: "OPEN",
+    message: "Ticket created successfully"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+					</otherwise>
+				</choice>
+			</when>
+									<otherwise>
+										<raise-error doc:name="Raise error" doc:id="a7b58e08-647d-4e76-8f48-e455e88a596d" type="CUSTOM:INVALID_PRIORITY" description="Invalid ticket priority. Allowed values are LOW, MEDIUM, HIGH"/>
+			</otherwise>
+		</choice>
+							</otherwise>
+						</choice>
+					</otherwise>
+				</choice>
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="da7921ab-7253-4d97-a15d-1a64f19a9868" type="VALIDATION:BLANK_STRING">
+				<set-variable value="#[400]" doc:name="Set Variable" doc:id="f42bab23-9868-432e-aaba-a5194e25c406" variableName="httpStatus"/>
+				<ee:transform doc:name="Transform Message" doc:id="8d71f59d-1ad2-4bb8-8264-4fe1abfb04b6" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    errorCode: "INVALID_REQUEST",
+    message: "Customer ID cannot be blank"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="46bd961f-9c77-4e20-bb53-1d18436cf791" type="CUSTOM:INVALID_PRIORITY">
+				<set-variable value="400" doc:name="Set Variable" doc:id="a1434324-6a6a-4b4f-92d5-7b3c0d5dd170" variableName="httpStatus"/>
+				<ee:transform doc:name="Transform Message" doc:id="8e142d55-8d3c-465e-9d00-735410588386" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    errorCode: "INVALID_PRIORITY",
+    message: "Invalid ticket priority. Allowed values are LOW, MEDIUM, HIGH"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="fc42761a-b8a0-4042-b150-00eb371ed635" type="CUSTOM:INVALID_SUBJECT">
+				<set-variable value="400" doc:name="Set Variable" doc:id="a5a5f994-b697-4eb6-a5ea-585870c32dd0" variableName="httpStatus"/>
+				<ee:transform doc:name="Transform Message" doc:id="686f9908-12f1-403c-bc70-c9c7dc4a9fbf" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    errorCode: "INVALID_SUBJECT",
+    message: "Subject cannot be blank"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="80679f08-67b7-455c-b9aa-8b5db64ec06f" type="CUSTOM:INVALID_DESCRIPTION">
+				<set-variable value="400" doc:name="Set Variable" doc:id="f334559e-f263-4f9d-9ed5-f007a7e1b9a8" variableName="httpStatus"/>
+				<ee:transform doc:name="Transform Message" doc:id="36519cd5-13cd-4b88-990a-0a822e2e2367" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    errorCode: "INVALID_DESCRIPTION",
+    message: "Description cannot be blank"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="cd9c4d7d-d45c-4541-b138-d14465df43fd" type="CUSTOM:DUPLICATE_TICKET">
+				<set-variable value="409" doc:name="Set Variable" doc:id="04fd564c-336d-430f-a63b-8b0586fed211" variableName="httpStatus"/>
+				<ee:transform doc:name="Transform Message" doc:id="30e71283-c7a8-41a2-9f59-164631602ee5" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    errorCode: "DUPLICATE_TICKET",
+    message: "Ticket already exists"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+	<flow name="customer-support-ticket-proc-apiFlow1(get)" doc:id="3b41e0f0-b90f-4316-ae6f-9e7ac546cca1" >
+		<http:listener doc:name="Listener" doc:id="585739fa-b79c-42fd-bbc4-687b5e67c99e" config-ref="HTTP_Listener_config" path="/tickets/{ticketId}" allowedMethods="GET">
+			<http:response statusCode="#[vars.httpStatus default 200]" />
+		</http:listener>
+		<logger level="INFO" doc:name="Logger" doc:id="aa2a718c-171f-4880-8249-0a2326c9be90" message="Received get ticket request in Process API"/>
+		<http:request method="GET" doc:name="Request" doc:id="e7b22379-9be5-4776-8abc-9f96c64605a0" config-ref="HTTP_Request_configuration1" path="/tickets/{ticketId}">
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	ticketId : attributes.uriParams.ticketId
+}]]]></http:uri-params>
+		</http:request>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="a1db6af0-0e8c-4e0b-9e7a-40c4db65a114" type="HTTP:NOT_FOUND">
+				<logger level="INFO" doc:name="Logger" doc:id="87218e51-ecd4-4f49-82ea-f2f6465ca945" message="PROCESS GET 404 HANDLER REACHED"/>
+				<set-variable value="404" doc:name="Set Variable" doc:id="c438d244-9238-4f12-a400-a6b05d78e028" variableName="httpStatus"/>
+				<ee:transform doc:name="Transform Message" doc:id="d64348cb-edeb-46be-a005-4be14d35db33" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    errorCode: "TICKET_NOT_FOUND",
+    message: "Ticket not found"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+	<flow name="customer-support-ticket-proc-apiFlow(patch)" doc:id="364fd82c-bd4d-4c52-9320-2132bfbc2482" >
+		<http:listener doc:name="Listener" doc:id="cf3992d2-ccd7-446d-b148-b395887bded2" config-ref="HTTP_Listener_config" path="/tickets/{ticketId}/status" allowedMethods="PATCH">
+			<http:response statusCode="#[vars.httpStatus default 200]" />
+		</http:listener>
+		<logger level="INFO" doc:name="Logger" doc:id="4f3b81b2-1d4d-4d8f-b4d7-c63ea92fa3c8" message="Received update ticket status request in Process API"/>
+		<validation:is-not-blank-string doc:name="Is not blank string" doc:id="384c5c2d-2e2d-42b6-8a23-baf310d0f028" value="#[payload.status]"/>
+		<choice doc:name="Choice" doc:id="38b2ae40-ad21-490b-be8a-2da1998d3df5" >
+			<when expression='#[payload.status == "OPEN" or payload.status == "IN_PROGRESS" or payload.status == "RESOLVED" or payload.status == "CLOSED"]'>
+				<set-variable value="#[attributes.uriParams.ticketId]" doc:name="Set Variable" doc:id="5bf0aec8-f979-4b53-a154-35b5ba86795b" variableName="ticketId"/>
+				<set-variable value="#[payload.status]" doc:name="Set Variable" doc:id="1de597b4-3455-46ba-98fd-4f4b0bad5d35" variableName="newStatus"/>
+				<http:request method="PATCH" doc:name="Request" doc:id="e3e0ae04-4cc3-456e-a9fc-383a9bb63ddb" config-ref="HTTP_Request_configuration" path="/tickets/{ticketId}/status">
+			<http:uri-params><![CDATA[#[output application/java
+---
+{
+	ticketId : attributes.uriParams.ticketId
+}]]]></http:uri-params>
+		</http:request>
+				<ee:transform doc:name="Transform Message" doc:id="3b68fb15-4445-40ff-93d2-47d5ad3b725e">
+			<ee:message>
+				<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+    ticketId: vars.ticketId,
+    status: vars.newStatus,
+    message: "Ticket status updated"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="c0ce9173-5708-45ab-82bb-f6d36d5bc04c" message="Invalid ticket status received"/>
+				<raise-error doc:name="Raise error" doc:id="41c011db-a354-47d4-b473-7cb965134758" type="CUSTOM:INVALID_STATUS" description="Invalid ticket status. Allowed values are OPEN, IN_PROGRESS, RESOLVED, CLOSED"/>
+			</otherwise>
+		</choice>
+		<error-handler >
+			<on-error-continue enableNotifications="true" logException="true" doc:name="On Error Continue" doc:id="dd89060b-4ba2-489f-a76b-97d7f35c1e12" type="CUSTOM:INVALID_STATUS">
+				<set-variable value="400" doc:name="Set Variable" doc:id="42ced54c-cee8-440c-abdf-c37a16c6bd39" variableName="httpStatus"/>
+				<ee:transform doc:name="Transform Message" doc:id="3dc00146-98c7-40c5-ad48-c9bd2d9ebb0b" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+    errorCode: "INVALID_STATUS",
+    message: "Invalid ticket status. Allowed values are OPEN, IN_PROGRESS, RESOLVED, CLOSED"
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+			</on-error-continue>
+		</error-handler>
+	</flow>
+</mule>

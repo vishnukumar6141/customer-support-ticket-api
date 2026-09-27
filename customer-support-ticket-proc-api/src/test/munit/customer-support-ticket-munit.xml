@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xmlns:munit="http://www.mulesoft.org/schema/mule/munit" xmlns:munit-tools="http://www.mulesoft.org/schema/mule/munit-tools"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xsi:schemaLocation="
+		http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+		http://www.mulesoft.org/schema/mule/munit http://www.mulesoft.org/schema/mule/munit/current/mule-munit.xsd
+		http://www.mulesoft.org/schema/mule/munit-tools  http://www.mulesoft.org/schema/mule/munit-tools/current/mule-munit-tools.xsd">
+	<munit:config name="create-ticket-success-test.xml" />
+	<munit:test name="create-ticket-success-test" doc:id="d2dc3dd8-c457-4973-9b67-dcc54ace8f9d" >
+		<munit:behavior >
+			<munit:set-event doc:name="Set Event" doc:id="7ead79e3-ef4f-4ba7-b575-b47905c305cb" >
+				<munit:payload value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;    customerId: "TEST001",&#10;    subject: "MUnit test ticket",&#10;    description: "Testing create ticket flow",&#10;    priority: "HIGH"&#10;}]' mediaType="application/json" />
+			</munit:set-event>
+			<munit-tools:mock-when doc:name="Mock when" doc:id="ff4bd1ff-8f6f-404d-9f11-cc4680888837" processor="http:request">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="POST" attributeName="method" />
+					<munit-tools:with-attribute whereValue="Request" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="HTTP_Request_configuration" attributeName="config-ref" />
+					<munit-tools:with-attribute whereValue="/tickets" attributeName="path" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value='#[{&#10;  "message": "Ticket stored successfully",&#10;  "status": "SUCCESS"&#10;}]' mediaType="application/json" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="a6f670d1-32ff-480a-990b-6c228b360477" name="customer-support-ticket-proc-apiFlow(create)"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-that doc:name="Assert that" doc:id="758994c7-9141-4861-b9b4-33c753e04fcb" expression="#[payload.status]" is="#[MunitTools::notNullValue()]"/>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="create-ticket-invalid-priority-test" doc:id="50e16192-3479-424b-865b-bc5c82f897d5" >
+		<munit:behavior >
+			<munit:set-event doc:name="Set Event" doc:id="2a9d69e7-3149-48cd-a74e-cf2e6ffa5908" >
+				<munit:payload value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;    customerId: "TEST002",&#10;    subject: "Invalid priority test",&#10;    description: "Testing invalid priority",&#10;    priority: "URGENT"&#10;}]' mediaType="application/json" />
+			</munit:set-event>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="d912bbd1-08db-4c7e-8bc0-2b8a813dc04f" name="customer-support-ticket-proc-apiFlow(create)"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-that doc:name="Assert that" doc:id="709e3c8b-5d26-436e-b818-82a29839a784" expression="#[payload.errorCode]" is="#[MunitTools::notNullValue()]"/>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="create-ticket-duplicate-test" doc:id="0b9f5a48-1d62-441e-8566-5005dd485a5a" >
+		<munit:behavior >
+			<munit:set-event doc:name="Set Event" doc:id="feeb3448-9001-42eb-a9f6-d725504d7ffd" >
+				<munit:payload value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;    customerId: "TEST003",&#10;    subject: "Duplicate test ticket",&#10;    description: "Testing duplicate ticket handling",&#10;    priority: "HIGH"&#10;}]' mediaType="application/json" />
+			</munit:set-event>
+			<munit-tools:mock-when doc:name="Mock when" doc:id="1cc212c6-0eab-484d-bfb7-5c789439a5d9" processor="os:contains">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="Contains" attributeName="doc:name" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value="#[true]" mediaType="application/java" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="84e0a872-f71c-45a8-8775-98085afff0d1" name="customer-support-ticket-proc-apiFlow(create)"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-that doc:name="Assert that" doc:id="29e3d2be-6146-48a1-85fe-1761c0d8db45" expression="#[payload.errorCode]" is="#[MunitTools::notNullValue()]"/>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="get-ticket-success-test" doc:id="e4453449-dc58-41d6-855e-19557750b388" >
+		<munit:behavior >
+			<munit:set-event doc:name="Set Event" doc:id="8e3e6476-b856-4f2a-a83d-af655362f9da" >
+				<munit:payload value='#[{&#10;    ticket_id: "TKT2881",&#10;    customer_id: "CUS301",&#10;    subject: "Login issue",&#10;    description: "Unable to login",&#10;    priority: "HIGH",&#10;    status: "OPEN"&#10;}]' mediaType="application/java" />
+			</munit:set-event>
+			<munit-tools:mock-when doc:name="Mock when" doc:id="e6802204-d945-48db-b1ea-233f74533e8c" processor="http:request">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="GET" attributeName="method" />
+					<munit-tools:with-attribute whereValue="Request" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="HTTP_Request_configuration1" attributeName="config-ref" />
+					<munit-tools:with-attribute whereValue="/tickets/{ticketId}" attributeName="path" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value='#[{&#10;    ticketId: "TKT2881",&#10;    customerId: "CUS301",&#10;    subject: "Login issue",&#10;    description: "Unable to login",&#10;    priority: "HIGH",&#10;    status: "OPEN"&#10;}]' mediaType="application/java" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="adbc03d4-82f3-48f7-b0bd-e9d51478a8ff" name="customer-support-ticket-proc-apiFlow1(get)"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-that doc:name="Assert that" doc:id="409c926f-b4ec-4863-8494-c975fff8405c" expression="#[payload.ticketId]" is="#[MunitTools::notNullValue()]"/>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="get-ticket-not-found-test" doc:id="f2482498-1fa2-4bc8-8b96-c8e11faf6307" >
+		<munit:behavior >
+			<munit:set-event doc:name="Set Event" doc:id="fc7b3c7c-7236-40ee-8488-7cf8647d3d3f" >
+				<munit:payload value="#[null]" mediaType="application/java" />
+			</munit:set-event>
+			<munit-tools:mock-when doc:name="Mock when" doc:id="cc7ffdc1-c64a-4555-835c-6e81ee066756" processor="http:request">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="GET" attributeName="method" />
+					<munit-tools:with-attribute whereValue="Request" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="HTTP_Request_configuration1" attributeName="config-ref" />
+					<munit-tools:with-attribute whereValue="/tickets/{ticketId}" attributeName="path" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value='#[{&#10;  "errorCode": "TICKET_NOT_FOUND",&#10;  "message": "Ticket not found"&#10;}]' />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="015ffd46-cb67-4156-8081-8f504ee82944" name="customer-support-ticket-proc-apiFlow1(get)"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-that doc:name="Assert that" doc:id="61a5b96b-869b-4d71-931d-88a2f5150998" expression="#[payload.errorCode]" is="#[MunitTools::notNullValue()]"/>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="update-ticket-status-success-test" doc:id="7b67f536-f3c6-4576-ae41-89e065244df0" >
+		<munit:behavior >
+			<munit:set-event doc:name="Set Event" doc:id="adb72df5-4e47-4823-abb0-0f453110417b" >
+				<munit:payload value='#[{&#10;    status: "CLOSED"&#10;}]' mediaType="application/java" />
+			</munit:set-event>
+			<munit-tools:mock-when doc:name="Mock when" doc:id="e0b4f7ce-278e-4d47-82cb-4e9b7c5a0aa0" processor="http:request">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="GET" attributeName="method" />
+					<munit-tools:with-attribute whereValue="Request" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="HTTP_Request_configuration1" attributeName="config-ref" />
+					<munit-tools:with-attribute whereValue="/tickets/{ticketId}" attributeName="path" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value='#[{&#10;    message: "Ticket status updated successfully",&#10;    status: "SUCCESS"&#10;}]' mediaType="application/java" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="ac9e90c7-7434-46cb-9c11-933c26ed449a" name="customer-support-ticket-proc-apiFlow1(get)"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-that doc:name="Assert that" doc:id="b35b2cd7-2946-4d56-830c-4371f629d838" expression="#[payload.status]" is="#[MunitTools::notNullValue()]"/>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="update-ticket-status-invalid-test" doc:id="b73d0d80-9083-4332-9fe1-25d17917058a" >
+		<munit:behavior >
+			<munit:set-event doc:name="Set Event" doc:id="eb1cc7ef-6a08-478d-9f3e-f37b1b849822" >
+				<munit:payload value='#[{&#10;    status: "PENDING"&#10;}]' mediaType="application/java" />
+			</munit:set-event>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="c99d3edf-b1dd-41e0-a0fe-4300d827282d" name="customer-support-ticket-proc-apiFlow(patch)"/>
+		</munit:execution>
+		<munit:validation >
+			<munit-tools:assert-that doc:name="Assert that" doc:id="6a1e9cc5-0a5e-4cb1-9510-ea0e8c7b62c6" is="#[MunitTools::notNullValue()]" expression="#[payload.errorCode]"/>
+		</munit:validation>
+	</munit:test>
+	<munit:test name="create-ticket-system-api-error-test" doc:id="f67fa0cd-193b-49c6-ada6-38bb02f47311" >
+		<munit:behavior >
+			<munit:set-event doc:name="Set Event" doc:id="13ede77a-fe5b-436b-b06a-9c673f3992a8" >
+				<munit:payload value='#[{&#10;    customerId: "TEST008",&#10;    subject: "System API failure test",&#10;    description: "Testing backend failure handling",&#10;    priority: "HIGH"&#10;}]' mediaType="application/java" />
+			</munit:set-event>
+			<munit-tools:mock-when doc:name="Mock when" doc:id="a9cdb391-f9f8-4fe5-adc8-d44d23eee496" processor="http:request">
+				<munit-tools:with-attributes >
+					<munit-tools:with-attribute whereValue="POST" attributeName="method" />
+					<munit-tools:with-attribute whereValue="Request" attributeName="doc:name" />
+					<munit-tools:with-attribute whereValue="HTTP_Request_configuration" attributeName="config-ref" />
+					<munit-tools:with-attribute whereValue="/tickets" attributeName="path" />
+				</munit-tools:with-attributes>
+				<munit-tools:then-return >
+					<munit-tools:payload value='#[{&#10;    errorCode: "SYSTEM_UNAVAILABLE",&#10;    message: "System API unavailable"&#10;}]' mediaType="application/java" />
+				</munit-tools:then-return>
+			</munit-tools:mock-when>
+		</munit:behavior>
+		<munit:execution >
+			<flow-ref doc:name="Flow Reference" doc:id="055c01bf-985f-4f97-b5f1-550a852e0938" name="customer-support-ticket-proc-apiFlow(create)"/>
+		</munit:execution>
+	</munit:test>
+
+
+</mule>
